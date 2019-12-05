@@ -136,7 +136,7 @@ public interface Memory extends AddressSetView {
 	 * Create an initialized memory block and add it to this Memory.
 	 * @param name block name
 	 * @param start start of the block
-	 * @param size block length
+	 * @param size block length (positive non-zero value required)
 	 * @param initialValue initialization value for every byte in the block.
 	 * @param monitor progress monitor, may be null.
 	 * @param overlay if true, the block will be created as an OVERLAY which means that a new
@@ -164,7 +164,7 @@ public interface Memory extends AddressSetView {
 	 * @param start starting address of the block
 	 * @param fileBytes the {@link FileBytes} object to use as the underlying source of bytes.
 	 * @param offset the offset into the FileBytes for the first byte of this memory block.
-	 * @param size block length
+	 * @param size block length (positive non-zero value required)
 	 * @param overlay if true, the block will be created as an OVERLAY which means that a new
 	 * overlay address space will be created and the block will have a starting address at the same
 	 * offset as the given start address parameter, but in the new address space.
@@ -174,8 +174,9 @@ public interface Memory extends AddressSetView {
 	 * space with the same name as this memory block 
 	 * @throws MemoryConflictException if the new block overlaps with a
 	 * previous block
-	 * @throws AddressOverflowException if the start is beyond the
-	 * address space
+	 * @throws AddressOverflowException if the start is beyond the address space
+	 * @throws IndexOutOfBoundsException if file bytes range specified by offset and size 
+	 * is out of bounds for the specified fileBytes.
 	 */
 	public MemoryBlock createInitializedBlock(String name, Address start, FileBytes fileBytes,
 			long offset, long size, boolean overlay) throws LockException, DuplicateNameException,
@@ -251,7 +252,7 @@ public interface Memory extends AddressSetView {
 			throws LockException, MemoryConflictException, AddressOverflowException;
 
 	/**
-	 * Remove the memory block
+	 * Remove the memory block.  
 	 *
 	 * @param block the block to be removed.
 	 * @param monitor monitor that is used to cancel the remove operation
@@ -269,8 +270,6 @@ public interface Memory extends AddressSetView {
 	 *
 	 * @param addr a valid data Address.
 	 * @return the block containing addr; null if addr is not a valid location.
-	 * @throws AddressTypeException if the addr is not the proper type
-	 * of Address for this Memory.
 	 */
 	public MemoryBlock getBlock(Address addr);
 
@@ -371,8 +370,8 @@ public interface Memory extends AddressSetView {
 	  * Finds a sequence of contiguous bytes that match the
 	  * given byte array at all bit positions where the mask contains an "on" bit.
 	  * Starts at startAddr and ends at endAddr.
-	  * If forward is true, search starts at startAddr and will end if startAddr ">" endAddr.
-	  * If forward is false, search starts at start addr and will end if startAddr "<" endAddr.
+	  * If forward is true, search starts at startAddr and will end if startAddr "&gt;" endAddr.
+	  * If forward is false, search starts at start addr and will end if startAddr "&lt;" endAddr.
 	  *
 	  * @param startAddr The beginning address in memory to search.
 	  * @param endAddr   The ending address in memory to search (inclusive).
@@ -465,7 +464,7 @@ public interface Memory extends AddressSetView {
 	 * @param addr the starting Address.
 	 * @param dest the short array to populate.
 	 * @param dIndex the offset into dest to place the shorts.
-	 * @param size the number of shorts to get.
+	 * @param nElem the number of shorts to get.
 	 * @return the number of shorts put into dest.  May be less than
 	 * dest.length if the requested number extends beyond available memory.
 	 * If the number of retrievable bytes is odd, the final byte will be discarded.
@@ -480,7 +479,7 @@ public interface Memory extends AddressSetView {
 	 * @param addr the starting Address.
 	 * @param dest the short array to populate.
 	 * @param dIndex the offset into dest to place the shorts.
-	 * @param size the number of shorts to get.
+	 * @param nElem the number of shorts to get.
 	 * @param isBigEndian true means to get the shorts in
 	 * bigEndian order
 	 * @return the number of shorts put into dest.  May be less than
@@ -532,7 +531,7 @@ public interface Memory extends AddressSetView {
 	 * @param addr the starting Address.
 	 * @param dest the int array to populate.
 	 * @param dIndex the offset into dest to place the ints.
-	 * @param size the number of ints to get.
+	 * @param nElem the number of ints to get.
 	 * @return the number of ints put into dest.  May be less than
 	 * dest.length if the requested number extends beyond available memory.
 	 * If the number of retrievable bytes is not 0 mod 4, the final byte(s) will be discarded.
@@ -547,7 +546,7 @@ public interface Memory extends AddressSetView {
 	 * @param addr the starting Address.
 	 * @param dest the int array to populate.
 	 * @param dIndex the offset into dest to place the ints.
-	 * @param size the number of ints to get.
+	 * @param nElem the number of ints to get.
 	 * @param isBigEndian true means to get the ints in
 	 * bigEndian order
 	 * @return the number of ints put into dest.  May be less than
@@ -598,7 +597,7 @@ public interface Memory extends AddressSetView {
 	 * @param addr the starting Address.
 	 * @param dest the long array to populate.
 	 * @param dIndex the offset into dest to place the longs.
-	 * @param size the number of longs to get.
+	 * @param nElem the number of longs to get.
 	 * @return the number of longs put into dest.  May be less than
 	 * dest.length if the requested number extends beyond available memory.
 	 * If the number of retrievable bytes is not 0 mod 8, the final byte(s) will be discarded.
@@ -613,7 +612,7 @@ public interface Memory extends AddressSetView {
 	 * @param addr the starting Address.
 	 * @param dest the long array to populate.
 	 * @param dIndex the offset into dest to place the longs.
-	 * @param size the number of longs to get.
+	 * @param nElem the number of longs to get.
 	 * @param isBigEndian true means to get the longs in
 	 * bigEndian order
 	 * @return the number of longs put into dest.  May be less than
@@ -728,11 +727,14 @@ public interface Memory extends AddressSetView {
 	 * @param offset the offset into the file for the first byte in the input stream.
 	 * @param size the number of bytes to store from the input stream.
 	 * @param is the input stream that will supply the bytes to store in the program.
+	 * @param monitor 
 	 * @return a FileBytes that was created to access the bytes.
 	 * @throws IOException if there was an IOException saving the bytes to the program database.
+	 * @throws CancelledException if the user cancelled this operation. Note: the database will
+	 * be stable, but the buffers may contain 0s instead of the actual bytes.
 	 */
-	public FileBytes createFileBytes(String filename, long offset, long size, InputStream is)
-			throws IOException;
+	public FileBytes createFileBytes(String filename, long offset, long size, InputStream is,
+			TaskMonitor monitor) throws IOException, CancelledException;
 
 	/**
 	 * Returns a list of all the stored original file bytes objects
@@ -743,9 +745,10 @@ public interface Memory extends AddressSetView {
 	/**
 	 * Deletes a stored sequence of file bytes.  The file bytes can only be deleted if there
 	 * are no memory block references to the file bytes.
+	 * 
 	 * @param fileBytes the FileBytes for the file bytes to be deleted.
-	 * @return true if the FileBytes was deleted.  If any memory blNoocks are reference this FileBytes,
-	 * then it will not be deleted and false will be returned.
+	 * @return true if the FileBytes was deleted.  If any memory blocks are referenced by this 
+	 * FileBytes or it is invalid then it will not be deleted and false will be returned.
 	 * @throws IOException if there was an error updating the database.
 	 */
 	public boolean deleteFileBytes(FileBytes fileBytes) throws IOException;

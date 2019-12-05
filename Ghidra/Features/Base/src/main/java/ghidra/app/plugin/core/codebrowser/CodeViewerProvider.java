@@ -29,6 +29,7 @@ import javax.swing.event.ChangeListener;
 
 import docking.*;
 import docking.action.*;
+import docking.actions.PopupActionProvider;
 import docking.dnd.*;
 import docking.widgets.EventTrigger;
 import docking.widgets.fieldpanel.FieldPanel;
@@ -47,7 +48,8 @@ import ghidra.app.util.viewer.listingpanel.*;
 import ghidra.app.util.viewer.multilisting.MultiListingLayoutModel;
 import ghidra.app.util.viewer.util.FieldNavigator;
 import ghidra.framework.options.SaveState;
-import ghidra.framework.plugintool.*;
+import ghidra.framework.plugintool.NavigatableComponentProviderAdapter;
+import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.*;
 import ghidra.program.util.*;
@@ -57,7 +59,7 @@ import resources.ResourceManager;
 
 public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		implements ProgramLocationListener, ProgramSelectionListener, Draggable, Droppable,
-		ChangeListener, StringSelectionListener, PopupListener {
+		ChangeListener, StringSelectionListener, PopupActionProvider {
 
 	private static final String OLD_NAME = "CodeBrowserPlugin";
 	private static final String NAME = "Listing";
@@ -156,7 +158,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		listingPanel.addIndexMapChangeListener(this);
 
 		codeViewerClipboardProvider = new CodeBrowserClipboardProvider(tool, this);
-		tool.addPopupListener(this);
+		tool.addPopupActionProvider(this);
 	}
 
 	@Override
@@ -226,6 +228,8 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	public void dispose() {
 		super.dispose();
 
+		tool.removePopupActionProvider(this);
+
 		if (clipboardService != null) {
 			clipboardService.deRegisterClipboardContentProvider(codeViewerClipboardProvider);
 		}
@@ -265,17 +269,17 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		FieldHeader headerPanel = listingPanel.getFieldHeader();
 		if (headerPanel != null && source instanceof FieldHeaderComp) {
 			FieldHeaderLocation fhLoc = headerPanel.getFieldHeaderLocation(event.getPoint());
-			return new ActionContext(this, fhLoc);
+			return createContext(fhLoc);
 		}
 
 		if (otherPanel != null && otherPanel.isAncestorOf((Component) source)) {
 			Object obj = getContextForMarginPanels(otherPanel, event);
 			if (obj != null) {
-				return new ActionContext(this, obj);
+				return createContext(obj);
 			}
 			return new OtherPanelContext(this, program);
 		}
-		return new ActionContext(this, getContextForMarginPanels(listingPanel, event));
+		return createContext(getContextForMarginPanels(listingPanel, event));
 	}
 
 	private Object getContextForMarginPanels(ListingPanel lp, MouseEvent event) {
@@ -415,7 +419,10 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 
 	void updateTitle() {
 		String subTitle = program == null ? "" : ' ' + program.getDomainFile().getName();
-		String newTitle = isConnected() ? TITLE : "[" + TITLE + subTitle + "]";
+		String newTitle = TITLE + subTitle;
+		if (!isConnected()) {
+			newTitle = '[' + newTitle + ']';
+		}
 		setTitle(newTitle);
 	}
 
@@ -882,8 +889,8 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		int index = saveState.getInt("INDEX", 0);
 		int yOffset = saveState.getInt("Y_OFFSET", 0);
 		ViewerPosition vp = new ViewerPosition(index, 0, yOffset);
-		listingPanel.getFieldPanel().setViewerPosition(vp.getIndex(), vp.getXOffset(),
-			vp.getYOffset());
+		listingPanel.getFieldPanel()
+				.setViewerPosition(vp.getIndex(), vp.getXOffset(), vp.getYOffset());
 		if (program != null) {
 			currentLocation = ProgramLocation.getLocation(program, saveState);
 			if (currentLocation != null) {
@@ -899,8 +906,8 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		// (its done in an invoke later)
 		Swing.runLater(() -> {
 			newProvider.doSetProgram(program);
-			newProvider.listingPanel.getFieldPanel().setViewerPosition(vp.getIndex(),
-				vp.getXOffset(), vp.getYOffset());
+			newProvider.listingPanel.getFieldPanel()
+					.setViewerPosition(vp.getIndex(), vp.getXOffset(), vp.getYOffset());
 			newProvider.setLocation(currentLocation);
 		});
 	}
@@ -920,13 +927,6 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 
 	protected FieldNavigator getFieldNavigator() {
 		return fieldNavigator;
-	}
-
-	public void updateTitle(String programName) {
-		decorationPanel.updateTitle(programName);
-
-		String newTitle = isConnected() ? TITLE : "[" + TITLE + "]";
-		setTitle(newTitle + programName);
 	}
 
 	public void setView(AddressSetView view) {
@@ -951,11 +951,11 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	}
 
 	@Override
-	public List<DockingActionIf> getPopupActions(ActionContext context) {
+	public List<DockingActionIf> getPopupActions(DockingTool dt, ActionContext context) {
 		if (context.getComponentProvider() == this) {
 			return listingPanel.getHeaderActions(getName());
 		}
-		return new ArrayList<>();
+		return null;
 	}
 
 //==================================================================================================
@@ -975,8 +975,8 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		public void actionPerformed(ActionContext context) {
 			boolean show = !listingPanel.isHeaderShowing();
 			listingPanel.showHeader(show);
-			getToolBarData().setIcon(
-				show ? LISTING_FORMAT_COLLAPSE_ICON : LISTING_FORMAT_EXPAND_ICON);
+			getToolBarData()
+					.setIcon(show ? LISTING_FORMAT_COLLAPSE_ICON : LISTING_FORMAT_EXPAND_ICON);
 		}
 	}
 
@@ -1038,5 +1038,21 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 
 			return list.toArray(new Highlight[list.size()]);
 		}
+	}
+
+	/**
+	 * Add the ListingDisplayListener to the listing panel
+	 * @param listener the listener to add
+	 */
+	public void addListingDisplayListener(ListingDisplayListener listener) {
+		listingPanel.addListingDisplayListener(listener);
+	}
+
+	/**
+	 * Remove the ListingDisplayListener from the listing panel
+	 * @param listener the listener to remove
+	 */
+	public void removeListingDisplayListener(ListingDisplayListener listener) {
+		listingPanel.removeListingDisplayListener(listener);
 	}
 }

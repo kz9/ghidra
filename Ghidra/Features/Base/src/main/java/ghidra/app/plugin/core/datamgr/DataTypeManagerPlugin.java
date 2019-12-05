@@ -27,7 +27,9 @@ import javax.swing.SwingUtilities;
 import javax.swing.tree.TreePath;
 
 import docking.ActionContext;
+import docking.DockingTool;
 import docking.action.*;
+import docking.actions.PopupActionProvider;
 import docking.widgets.tree.GTreeNode;
 import generic.jar.ResourceFile;
 import generic.util.Path;
@@ -47,7 +49,8 @@ import ghidra.framework.Application;
 import ghidra.framework.main.OpenVersionedFileDialog;
 import ghidra.framework.model.*;
 import ghidra.framework.options.SaveState;
-import ghidra.framework.plugintool.*;
+import ghidra.framework.plugintool.PluginInfo;
+import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.program.database.DataTypeArchiveContentHandler;
 import ghidra.program.database.data.ProgramDataTypeManager;
@@ -78,7 +81,7 @@ import ghidra.util.task.TaskLauncher;
 )
 //@formatter:on
 public class DataTypeManagerPlugin extends ProgramPlugin
-		implements DomainObjectListener, DataTypeManagerService, PopupListener {
+		implements DomainObjectListener, DataTypeManagerService, PopupActionProvider {
 
 	private static final String SEACH_PROVIDER_NAME = "Search DataTypes Provider";
 	private static final int RECENTLY_USED_CACHE_SIZE = 10;
@@ -158,7 +161,7 @@ public class DataTypeManagerPlugin extends ProgramPlugin
 		if (codeViewerService != null) {
 			codeViewerService.addProgramDropProvider(new DataDropOnBrowserHandler(this));
 		}
-		tool.addPopupListener(this);
+		tool.addPopupActionProvider(this);
 		tool.setMenuGroup(new String[] { SyncRefreshAction.MENU_NAME }, "SYNC");
 		tool.setMenuGroup(new String[] { UpdateAction.MENU_NAME }, "SYNC");
 		tool.setMenuGroup(new String[] { CommitAction.MENU_NAME }, "SYNC");
@@ -202,9 +205,9 @@ public class DataTypeManagerPlugin extends ProgramPlugin
 	}
 
 	/**
-	 * Add project pathname to recently opened list.
-	 * @param projectName
-	 * @param pathname
+	 * Add project archive name to recently opened list
+	 * @param projectName the project name
+	 * @param pathname the pathname 
 	 */
 	public void addRecentlyOpenedProjectArchive(String projectName, String pathname) {
 		String projectPathname = DataTypeManagerHandler.getProjectPathname(projectName, pathname);
@@ -236,8 +239,8 @@ public class DataTypeManagerPlugin extends ProgramPlugin
 
 	/**
 	 * Get a project archive file by project name and pathname
-	 * @param projectName
-	 * @param pathname
+	 * @param projectName the project name
+	 * @param pathname the project pathname
 	 * @return project archive domain file or null if it does not exist
 	 * or can not be found (e.g., projectName is not the active project)
 	 */
@@ -263,16 +266,12 @@ public class DataTypeManagerPlugin extends ProgramPlugin
 
 	@Override
 	public void dispose() {
-		tool.removePopupListener(this);
+		tool.removePopupActionProvider(this);
 		provider.dispose();
 		close();
 		dataTypeManagerHandler.dispose();
 	}
 
-	/**
-	 * Tells the Plugin to read its data-independant (preferences)
-	 * properties from the input stream.
-	 */
 	@Override
 	public void readConfigState(SaveState saveState) {
 		dataTypeManagerHandler.restore(saveState);
@@ -308,10 +307,6 @@ public class DataTypeManagerPlugin extends ProgramPlugin
 		dataTypePropertyManager.programClosed(program);
 	}
 
-	/**
-	 * Program was opened.
-	 * @param program
-	 */
 	@Override
 	protected void programActivated(Program program) {
 		program.addListener(this);
@@ -571,7 +566,6 @@ public class DataTypeManagerPlugin extends ProgramPlugin
 			openDialog.addOkActionListener(listener);
 		}
 		tool.showDialog(openDialog);
-//        updateActions();
 	}
 
 	@Override
@@ -699,7 +693,7 @@ public class DataTypeManagerPlugin extends ProgramPlugin
 	}
 
 	@Override
-	public List<DockingActionIf> getPopupActions(ActionContext context) {
+	public List<DockingActionIf> getPopupActions(DockingTool dockingTool, ActionContext context) {
 		if (!(context instanceof DataTypesActionContext)) {
 			return null;
 		}
